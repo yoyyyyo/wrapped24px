@@ -19,7 +19,7 @@ contract Wrapped24px is ERC1155Holder, ERC721, Ownable {
     IERC1155 private openSeaStorefront = IERC1155(0x495f947276749Ce646f68AC8c248420045cb7b5e);
     uint     private MIN_ID = 1;
     uint     private MAX_ID = 9900;
-    uint     private UNKNOWN_INT = 1;
+    uint     private QUANTITY = 1;
     uint     private deployedAt;
     string   private baseURI;
 
@@ -50,17 +50,14 @@ contract Wrapped24px is ERC1155Holder, ERC721, Ownable {
         ** in Base16, and use the following format:
         **
         **   efe708e6dd941e29965f34f4c5c6e78f0ebe3f5b 000000000026af 0000000001
-        **   token creator address                    token ID       "1"
+        **   token creator address                    token ID       total qty.
         **              (the example ID above is from PixelCat 9900)
         **
-        ** I am not sure what the last part of the ID is supposed to indicate.
-        ** At first, I thought it was the chain ID, but storefront tokens on Polygon
-        ** also have just "1" in that part of the ID. ¯\_(ツ)_/¯
         */
 
         uint p1 = uint256(uint160(_24PX_DEPLOYER_ADDRESS)) << 96;
         uint p2 = (id + offset) << 40;
-        uint p3 = UNKNOWN_INT;
+        uint p3 = QUANTITY;
         return p1 + p2 + p3;
     }
 
