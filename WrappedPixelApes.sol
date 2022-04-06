@@ -73,12 +73,10 @@ contract WrappedPixelApes is ERC1155Holder, ERC721, Ownable {
     }
 
     function wrapSingle(uint _id) external {
-        uint openSeaId = _toOpenSeaId(_id);
-
         openSeaStorefront.safeTransferFrom(
             msg.sender,
             address(this),
-            openSeaId,
+            _toOpenSeaId(_id),
             QUANTITY,
             ""
         );
