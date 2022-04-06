@@ -1,29 +1,27 @@
-pragma solidity >=0.8.12;
+pragma solidity >=0.8.13;
 
 // SPDX-License-Identifier: CC0-1.0
 
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract WrappedPixelApes is ERC1155Holder, ERC721, Ownable {
     
-    constructor(string memory _baseURI) ERC721("Wrapped PixelApes", "wApe24px") {
-        deployedAt = block.number;
-        baseURI = _baseURI;
-    }
+    constructor() ERC721("Wrapped PixelApes", "w24ape") {}
 
-    address  private _24PX_DEPLOYER_ADDRESS = 0xEfE708e6Dd941e29965F34f4c5C6e78f0Ebe3F5b;
-    IERC1155 private openSeaStorefront = IERC1155(0x495f947276749Ce646f68AC8c248420045cb7b5e);
-    uint     private MIN_ID = 1;
-    uint     private MAX_ID = 9900;
-    uint     private QUANTITY = 1;
-    uint     private deployedAt;
-    string   private baseURI;
+    IERC1155 private constant openSeaStorefront = IERC1155(0x495f947276749Ce646f68AC8c248420045cb7b5e);
 
-    function toOpenSeaId(uint id) external view returns (uint) {
+    // replace these parameters with your own if you are using this
+    address  private constant OPENSEA_CREATOR = 0xEfE708e6Dd941e29965F34f4c5C6e78f0Ebe3F5b;
+    uint     private constant MIN_ID = 1;
+    uint     private constant MAX_ID = 9900;
+    uint     private constant QUANTITY = 1;
+    string   private constant BASE_URI = "ipfs://QmNVgEVXHeRDb2eteYr7R6PqoE5b1v8PkkNorqocPapPJ4/";
+
+    function _toOpenSeaId(uint id) internal pure returns (uint) {
         require(id >= MIN_ID, "id too low");
         require(id <= MAX_ID, "id too high");
 
@@ -65,41 +63,81 @@ contract WrappedPixelApes is ERC1155Holder, ERC721, Ownable {
         **   efe708e6dd941e29965f34f4c5c6e78f0ebe3f5b 000000000026af 0000000001
         **   token creator address                    token ID       total qty.
         **              (the example ID above is from PixelCat 9900)
+        **
         */
 
-        uint p1 = uint256(uint160(_24PX_DEPLOYER_ADDRESS)) << 96;
+        uint p1 = uint256(uint160(OPENSEA_CREATOR)) << 96;
         uint p2 = (id + offset) << 40;
-        uint p3 = QUANTITY;
-        return p1 + p2 + p3;
+
+        return p1 + p2 + QUANTITY;
     }
 
+    function wrapSingle(uint _id) external {
+        uint openSeaId = _toOpenSeaId(_id);
 
-    function _wrap(uint _id, address _caller) internal {
-        uint openSeaId = this.toOpenSeaId(_id);
-        openSeaStorefront.safeTransferFrom(_caller, address(this), openSeaId, 1, "");
-        _safeMint(_caller, _id);
+        openSeaStorefront.safeTransferFrom(
+            msg.sender,
+            address(this),
+            openSeaId,
+            QUANTITY,
+            ""
+        );
+
+        _safeMint(msg.sender, _id);
     }
 
-    function _unwrap(uint _id, address _caller) internal {
-        require(ownerOf(_id) == _caller, "not the owner");
+    function unwrapSingle(uint _id) external {
+        require(ownerOf(_id) == msg.sender, "not the owner");
         _burn(_id);
-        openSeaStorefront.safeTransferFrom(address(this), _caller, this.toOpenSeaId(_id), 1, "");
+
+        openSeaStorefront.safeTransferFrom(
+            address(this),
+            msg.sender,
+            _toOpenSeaId(_id),
+            QUANTITY,
+            ""
+        );
     }
 
-    function _checkApproval(address _caller) internal view returns (bool) {
-        return openSeaStorefront.isApprovedForAll(_caller, address(this));
+    function wrapMultiple(uint[] calldata ids) external {
+        uint[] memory openStoreIds = new uint[](ids.length);
+        uint[] memory quantities = new uint[](ids.length);
+
+        for (uint i = 0; i < ids.length; i++) {
+            openStoreIds[i] = _toOpenSeaId(ids[i]);
+            quantities[i] = 1;
+            _mint(msg.sender, ids[i]);
+        }
+
+        openSeaStorefront.safeBatchTransferFrom(
+            msg.sender,
+            address(this),
+            openStoreIds,
+            quantities,
+            ""
+        );
     }
 
-    function wrap(uint[] calldata ids) external {
-        require(_checkApproval(_msgSender()), "Contract is not approved to transfer tokens");
+    function unwrapMultiple(uint[] calldata ids) external {
+        uint[] memory openStoreIds = new uint[](ids.length);
+        uint[] memory quantities = new uint[](ids.length);
 
-        for(uint i = 0; i < ids.length; i++)
-            _wrap(ids[i], _msgSender());
-    }
+        for (uint i = 0; i < ids.length; i++) {
+            require(msg.sender == ownerOf(ids[i]), "not the owner");
 
-    function unwrap(uint[] calldata ids) external {
-        for(uint i = 0; i < ids.length; i++)
-            _unwrap(ids[i], _msgSender());
+            openStoreIds[i] = _toOpenSeaId(ids[i]);
+            quantities[i] = 1;
+
+            _burn(ids[i]);
+        }
+
+        openSeaStorefront.safeBatchTransferFrom(
+            address(this),
+            msg.sender,
+            openStoreIds,
+            quantities,
+            ""
+        );
     }
 
     function supportsInterface(bytes4 interfaceId) public pure override(ERC721, ERC1155Receiver) returns (bool) {
@@ -109,30 +147,12 @@ contract WrappedPixelApes is ERC1155Holder, ERC721, Ownable {
                interfaceId == 0x4e2312e0;   // ERC1155TokenReceiver
     }
 
-
-    /* 
-    ** I have added this function as a preventative measure
-    ** in case there is something wrong with the metadata.
-    ** The require() within the function ensures that the
-    ** URI becomes uneditable after 172 800 blocks
-    ** (very roughly +- 30 days) have passed since deployment.
-    ** This is to prevent me (the author) or anyone from tampering
-    ** with the base URI any time beyond the first 30 days,
-    ** but still give me enough time to issue a fix in case 
-    ** the metadata is broken or incorrect.
-    */
-    
-    function updateTokenURI(string calldata _newURI) external onlyOwner {
-        require(block.number < deployedAt + 172800, "URI is permanently locked");
-        baseURI = _newURI;
-    }
-
-    function tokenURI(uint id) public view override returns (string memory) {
+    function tokenURI(uint id) public pure override returns (string memory) {
         return string(
             abi.encodePacked(
-                baseURI, Strings.toString(id), ".json"
+                BASE_URI, Strings.toString(id), ".json"
             )
         );
     }
-
+    
 }
