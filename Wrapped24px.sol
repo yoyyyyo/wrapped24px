@@ -68,7 +68,7 @@ contract WrappedPixelCats is ERC1155Holder, ERC721, Ownable {
             ""
         );
 
-        _safeMint(msg.sender, _id);
+        _mint(msg.sender, _id);
     }
 
     function unwrapSingle(uint _id) external {
